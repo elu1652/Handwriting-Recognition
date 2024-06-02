@@ -15,7 +15,9 @@ import keyboard
 from matplotlib import pyplot as plt
 import imutils
 from imutils.contours import sort_contours
+from sklearn.preprocessing import LabelBinarizer
 
+FILEPATH = 'azdata.csv'
 
 def load_az(filePath):
     #Load in training data for letters A-Z
@@ -36,33 +38,60 @@ def load_az(filePath):
 
     data = np.array(data,dtype='float32')
     labels = np.array(labels,dtype='int')
-    return data,labels
+    return (data,labels)
 
 def load_mnist():
     #Load in mnist dataset
     input_shape = (28,28,1)
     ((trainData, trainLabels), (testData, testLabels)) = mnist.load_data()
-    #data = np.vstack([trainData,testData])
-    #labels = np.hstack([trainLabels,testLabels])
+    #Combine Training and Test data
+    data = np.vstack([trainData,testData])
+    labels = np.hstack([trainLabels,testLabels])
     
     #Reshape and normalize
-    trainData = trainData.reshape(trainData.shape[0],trainData.shape[1],trainData.shape[2],1)
+    '''trainData = trainData.reshape(trainData.shape[0],trainData.shape[1],trainData.shape[2],1)
     trainData = trainData/255
     testData = testData.reshape(testData.shape[0],testData.shape[1],testData.shape[2],1)
     testData = testData/255
     trainLabels = tf.one_hot(trainLabels.astype(np.int32), depth=10)
-    testLabels = tf.one_hot(testLabels.astype(np.int32),depth = 10)
+    testLabels = tf.one_hot(testLabels.astype(np.int32),depth = 10)'''
     
     
-    return input_shape,trainData,trainLabels,testData,testLabels
+    #return input_shape,trainData,trainLabels,testData,testLabels
+    return (data,labels)
 
 def train():
     batch_size = 64
-    num_classes = 10
+    #Output size
+    num_classes = 36
     epochs = 5
-    input_shape,trainData,trainLabel,testData,testLabels = load_mnist()
-    path = 'numberModel.h5'
+    input_shape = (28,28,1)
+    #input_shape,trainData,trainLabel,testData,testLabels = load_mnist()
+    
+
+
+    path = 'numberModel2.h5'
     if not os.path.exists(path): #If previous trained model does not exist, train
+        (trainData,trainLabel) = load_mnist()
+        (azData,azLabels) = load_az(FILEPATH)
+
+        #Account for numbers
+        azLabels += 10
+
+        #Combine
+        data = np.vstack([azData,trainData])
+        labels = np.hstack([azLabels,trainLabel])
+
+        #Normalize and adjust
+        data = np.array(data,dtype='float32')
+
+        data = np.expand_dims(data,axis=-1)
+        data /= 255.0
+
+        #Turn label from number to vector
+        L = LabelBinarizer()
+        labels = L.fit_transform(labels)
+        #Train
         model = tf.keras.models.Sequential([
             tf.keras.layers.Conv2D(32, (5,5), padding='same', activation='relu', input_shape=input_shape),
             tf.keras.layers.MaxPool2D(),
@@ -77,12 +106,12 @@ def train():
             ])
 
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['acc'])
-        history = model.fit(trainData, trainLabel,
+        history = model.fit(data, labels,
                         batch_size=batch_size,
                         epochs=epochs,
                         validation_split=0.1)
 
-        model.save('numberModel.h5')
+        model.save('numberModel2.h5')
     else:
         model = tf.keras.models.load_model(path)
     
@@ -91,12 +120,14 @@ def train():
     #Predict reult
     prediction = model.predict(imar)
     result = np.argmax(prediction)
-
+    if result > 9:
+        result = chr(result+55)
     print(result)
     
 def test():
     #Creates drawing board
     global canvas,root
+
     root = Tk()
     root.geometry('800x800')
 
@@ -144,17 +175,22 @@ def save():
     small = PIL.ImageOps.invert(small)
     small.save('small.png',quality = 100)
 
+    #Add contrast to clear up image
+    test = cv2.imread('small.png')
+    test = cv2.addWeighted(test,5,np.zeros(test.shape,test.dtype),0,10)
+    img = Image.fromarray(test)
+    img.save('data.png')
     
 def convert():
     #imar = image array
-    imar = np.array(cv2.imread('small.png',0)) 
+    imar = np.array(cv2.imread('data.png',0)) 
     
     #Normalize
     imar = imar.astype('float32')/255
     
     #Reshape for it to work with CNN
     imar = imar.reshape(1,28,28,1)
-    
+
     return imar
 
 
