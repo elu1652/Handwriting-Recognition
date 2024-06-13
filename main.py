@@ -141,6 +141,8 @@ def test():
 
     canvas.bind("<Button-1>",get_coord)
     canvas.bind("<B1-Motion>",draw)
+    canvas.bind("<Button-3>",get_coord)
+    canvas.bind("<B3-Motion>",erase)
     while True:
         if keyboard.is_pressed('enter'):
             #Save and print predicted number when enter is pressed
@@ -163,6 +165,11 @@ def draw(event):
     #Draw line when button is held
     global x_old, y_old
     canvas.create_line((x_old,y_old,event.x,event.y),width=10)
+    x_old,y_old = event.x,event.y
+
+def erase(event):
+    global x_old,y_old
+    canvas.create_line((x_old,y_old,event.x,event.y),fill='white',width = 30)
     x_old,y_old = event.x,event.y
 
 def save():
@@ -247,6 +254,10 @@ def detect():
                                                     cv2.CHAIN_APPROX_NONE) 
 
     coords = []
+    row = []
+    graph = []
+    for i in range(54):
+        graph.append([])
     for cnt in contours: 
         x, y, w, h = cv2.boundingRect(cnt) 
         
@@ -258,13 +269,20 @@ def detect():
         #Predict
         num = str(train())
         coords.append([x,y,w,h,num])
+        r = y//20
+        graph[r].append([x,y,w,h,num])
+        row.append(r)
         # Draw a rectangle on copied image and print predicted value
         rect = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2) 
         cv2.putText(img, num, (x - 10, y - 10),
 		cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
     cv2.imwrite('drawed.png', img)
     coords.sort(key=lambda x:x[0])
-    print(coords)
+    #print(coords)
+    graph = [x for x in graph if len(x) > 0]
+    
+    
+    '''
     for i in range(len(coords)-1):
         gap = coords[i+1][0] - (coords[i][0] + coords[i][2])
         if gap <= 30 and abs(coords[i+1][1]-coords[i][1]) <= 20:
@@ -275,6 +293,22 @@ def detect():
             rect = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2) 
             cv2.putText(img, coords[i][4]+coords[i+1][4], (x - 10, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+'''
+    for r in graph:
+        r.sort(key=lambda x:x[0])
+        for i in range(len(r)-1):
+            gap = r[i+1][0] - (r[i][0]+r[i][2])
+            if gap <= 50:
+                thresh = 30
+                x = r[i][0]-thresh
+                y = min(r[i][1],r[i+1][1]) - thresh
+                w = r[i][2] + gap + r[i+1][2] + thresh
+                h = max(r[i][3],r[i+1][3]) + thresh
+                rect = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2) 
+                cv2.putText(img, r[i][4]+r[i+1][4], (x - 10, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+
     cv2.imwrite('drawed.png', img)
+    print(graph)
 test()
 
