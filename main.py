@@ -17,6 +17,7 @@ import imutils
 from imutils.contours import sort_contours
 from sklearn.preprocessing import LabelBinarizer
 
+
 FILEPATH = 'azdata.csv'
 
 def load_az(filePath):
@@ -64,13 +65,13 @@ def train():
     batch_size = 64
     #Output size
     num_classes = 36
-    epochs = 5
+    epochs = 2
     input_shape = (28,28,1)
     #input_shape,trainData,trainLabel,testData,testLabels = load_mnist()
     
 
 
-    path = 'numberModel2.h5'
+    path = 'numbersOnly.h5'
     if not os.path.exists(path): #If previous trained model does not exist, train
         (trainData,trainLabel) = load_mnist()
         (azData,azLabels) = load_az(FILEPATH)
@@ -94,13 +95,17 @@ def train():
         #Train
         model = tf.keras.models.Sequential([
             tf.keras.layers.Conv2D(32, (5,5), padding='same', activation='relu', input_shape=input_shape),
+            tf.keras.layers.Conv2D(32,(5,5),padding='same',activation='relu'),
             tf.keras.layers.MaxPool2D(),
             tf.keras.layers.Dropout(0.25),
+
+            tf.keras.layers.Conv2D(64, (3,3), padding='same', activation='relu'),
             tf.keras.layers.Conv2D(64, (3,3), padding='same', activation='relu'),
             tf.keras.layers.MaxPool2D(),
             tf.keras.layers.Dropout(0.25),
+
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(256, activation='relu'),
             tf.keras.layers.Dropout(0.5),
             tf.keras.layers.Dense(num_classes, activation='softmax')
             ])
@@ -122,7 +127,7 @@ def train():
     result = np.argmax(prediction)
     if result > 9:
         result = chr(result+55)
-    print(result)
+    return result
     
 def test():
     #Creates drawing board
@@ -140,7 +145,8 @@ def test():
         if keyboard.is_pressed('enter'):
             #Save and print predicted number when enter is pressed
             save()
-            train()
+            detect()
+            #train()
         elif keyboard.is_pressed('escape'):
             #Clear board if escape is pressed
             canvas.delete('all')
@@ -166,10 +172,10 @@ def save():
     x1 = x0 + canvas.winfo_width()+185
     y1 = y0 + canvas.winfo_height()+190
     
-    print(x0,y0,x1,y1)
+    #print(x0,y0,x1,y1)
     image = ImageGrab.grab(bbox=(x0, y0, x1, y1))
     image.save('draw.png')
-    
+    '''
     #Resize it to 28x28 pixels while keeping some quality
     small = image.resize((28,28),Image.ANTIALIAS)
     small = PIL.ImageOps.invert(small)
@@ -180,7 +186,7 @@ def save():
     test = cv2.addWeighted(test,5,np.zeros(test.shape,test.dtype),0,10)
     img = Image.fromarray(test)
     img.save('data.png')
-    
+    '''
 def convert():
     #imar = image array
     imar = np.array(cv2.imread('data.png',0)) 
@@ -194,4 +200,68 @@ def convert():
     return imar
 
 
+def save_coord(x,y,w,h):
+    #Crop and save image
+    #x += 50
+    #y +=50
+    x0 = x
+    y0 = y
+    x1 = x+w
+    y1 = y+h
+    
+    #print(x0,y0,x1,y1)
+    #image = ImageGrab.grab(bbox=(x0, y0, x1, y1))
+    image = Image.open('cropped.png')
+    #image = image.crop((x,y,w,h))
+    #image.save('draw1.png')
+    
+    #Resize it to 28x28 pixels while keeping some quality
+    small = image.resize((28,28),Image.ANTIALIAS)
+    small = PIL.ImageOps.invert(small)
+    small.save('small.png',quality = 100)
+
+    #Add contrast to clear up image
+    test = cv2.imread('small.png')
+    test = cv2.addWeighted(test,5,np.zeros(test.shape,test.dtype),0,10)
+    img = Image.fromarray(test)
+    img.save('data.png')
+
+def detect():
+    #Load image
+    img = cv2.imread('draw.png')
+    #Grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
+    #Blur to remove noise
+    blur = cv2.GaussianBlur(gray,(5,5),0)
+
+    #Turn background white and letters and numbers black
+    ret, thresh1 = cv2.threshold(blur, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV) 
+
+    #Make number and letter more visible and larger by dilation
+    rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18)) 
+    dilation = cv2.dilate(thresh1, rect_kernel, iterations = 1) 
+
+    #Find contours
+    contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, 
+                                                    cv2.CHAIN_APPROX_NONE) 
+
+
+    for cnt in contours: 
+        x, y, w, h = cv2.boundingRect(cnt) 
+        
+        #Crop out the letter or number
+        cropped = img[y:y+h,x:x+w]
+        cv2.imwrite('cropped.png',cropped)
+        #Save the cropped image then process it
+        save_coord(x,y,w,h)
+        #Predict
+        num = str(train())
+        # Draw a rectangle on copied image and print predicted value
+        rect = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2) 
+        cv2.putText(img, num, (x - 10, y - 10),
+		cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+    cv2.imwrite('drawed.png', img)
+    
+
 test()
+
