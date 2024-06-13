@@ -228,7 +228,8 @@ def save_coord(x,y,w,h):
 
 def detect():
     #Load image
-    img = cv2.imread('draw.png')
+    og = cv2.imread('draw.png')
+    img = og.copy()
     #Grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
     #Blur to remove noise
@@ -245,7 +246,7 @@ def detect():
     contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, 
                                                     cv2.CHAIN_APPROX_NONE) 
 
-
+    coords = []
     for cnt in contours: 
         x, y, w, h = cv2.boundingRect(cnt) 
         
@@ -256,12 +257,24 @@ def detect():
         save_coord(x,y,w,h)
         #Predict
         num = str(train())
+        coords.append([x,y,w,h,num])
         # Draw a rectangle on copied image and print predicted value
         rect = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2) 
         cv2.putText(img, num, (x - 10, y - 10),
 		cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
     cv2.imwrite('drawed.png', img)
-    
-
+    coords.sort(key=lambda x:x[0])
+    print(coords)
+    for i in range(len(coords)-1):
+        gap = coords[i+1][0] - (coords[i][0] + coords[i][2])
+        if gap <= 30 and abs(coords[i+1][1]-coords[i][1]) <= 20:
+            x = coords[i][0] - 20
+            y = min(coords[i][1],coords[i+1][1]) - 20
+            w = coords[i][2] + gap + coords[i+1][2] + 20
+            h = max(coords[i][3],coords[i+1][3]) + 20
+            rect = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2) 
+            cv2.putText(img, coords[i][4]+coords[i+1][4], (x - 10, y - 10),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+    cv2.imwrite('drawed.png', img)
 test()
 
