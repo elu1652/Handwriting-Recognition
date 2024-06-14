@@ -256,8 +256,12 @@ def detect():
     coords = []
     row = []
     graph = []
-    for i in range(54):
+    diff = 200
+
+    #Create matrix with 1080//diff rows
+    for i in range(1080//diff):
         graph.append([])
+
     for cnt in contours: 
         x, y, w, h = cv2.boundingRect(cnt) 
         
@@ -268,8 +272,9 @@ def detect():
         save_coord(x,y,w,h)
         #Predict
         num = str(train())
-        coords.append([x,y,w,h,num])
-        r = y//20
+        #Add data into list for detecting multidigit numbers
+        coords.append([x,y,w,h,num,posValue(x,y,w,h)])
+        r = y//diff
         graph[r].append([x,y,w,h,num])
         row.append(r)
         # Draw a rectangle on copied image and print predicted value
@@ -277,38 +282,91 @@ def detect():
         cv2.putText(img, num, (x - 10, y - 10),
 		cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
     cv2.imwrite('drawed.png', img)
-    coords.sort(key=lambda x:x[0])
+    coords.sort(key=lambda x:x[-1])
     #print(coords)
     graph = [x for x in graph if len(x) > 0]
-    
-    
+
+    print(coords)
+    #Position Value method
     '''
-    for i in range(len(coords)-1):
-        gap = coords[i+1][0] - (coords[i][0] + coords[i][2])
-        if gap <= 30 and abs(coords[i+1][1]-coords[i][1]) <= 20:
-            x = coords[i][0] - 20
-            y = min(coords[i][1],coords[i+1][1]) - 20
-            w = coords[i][2] + gap + coords[i+1][2] + 20
-            h = max(coords[i][3],coords[i+1][3]) + 20
+    i = 0
+    while i < len(coords)-1:
+        if isSame(coords[i],coords[i+1]):
+            cur = i + 1
+            compare = [coords[i],coords[i+1]]
+            while cur < len(coords)-1 and isSame(coords[cur],coords[cur+1]):
+                compare.append(coords[cur+1])
+                cur += 1
+                
+            thresh = 30
+            x = coords[i][0]-thresh
+            #y = min(r[i][1],r[i+1][1]) - thresh
+            y = min(compare,key=lambda x:x[1])[1] - thresh
+            
+            #w = r[i][2] + gap + r[i+1][2] + thresh
+            w = compare[0][2] + compare[-1][2] + (compare[-1][0]-(compare[0][0] + compare[0][2])) + thresh
+            #h = max(r[i][3],r[i+1][3]) + thresh
+            h = max(compare,key=lambda x:x[3])[3] + thresh
             rect = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2) 
-            cv2.putText(img, coords[i][4]+coords[i+1][4], (x - 10, y - 10),
+            num = ''.join(x[4] for x in compare)
+            cv2.putText(img, num, (x - 10, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
-'''
+            i = cur - 1
+        i += 1'''
+    
+
+
+    #Matrix Method
     for r in graph:
+        #Sort each row left to right
         r.sort(key=lambda x:x[0])
-        for i in range(len(r)-1):
-            gap = r[i+1][0] - (r[i][0]+r[i][2])
-            if gap <= 50:
+        i = 0
+        while i < len(r)-1:
+            #Find if current digit and next digit qualify as the same number
+            if isSame(r[i],r[i+1]):
+                compare = [r[i],r[i+1]]
+                cur = i+1
+                #Keep adding digits if current digit is close enough
+                while cur < len(r)-1 and isSame(r[cur],r[cur+1]):
+                    compare.append(r[cur+1])
+                    cur += 1
+                
                 thresh = 30
+                #Top left corner of first digit
                 x = r[i][0]-thresh
-                y = min(r[i][1],r[i+1][1]) - thresh
-                w = r[i][2] + gap + r[i+1][2] + thresh
-                h = max(r[i][3],r[i+1][3]) + thresh
+                #Lowest y value out of all the digits
+                y = min(compare,key=lambda x:x[1])[1] - thresh
+                
+                #Total distance across all digits
+                w = compare[0][2] + compare[-1][2] + (compare[-1][0]-(compare[0][0] + compare[0][2])) + thresh
+                #Highest y value out of all the digits
+                h = max(compare,key=lambda x:x[3])[3] + thresh
+                #Draw a rectangle
                 rect = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2) 
-                cv2.putText(img, r[i][4]+r[i+1][4], (x - 10, y - 10),
+                #Get final multidigit number and display it
+                num = ''.join(x[4] for x in compare)
+                cv2.putText(img, num, (x - 10, y - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+                i = cur - 1
+            i += 1
+
 
     cv2.imwrite('drawed.png', img)
-    print(graph)
+    #print(graph)    
+    
+
+def isSame(a,b):
+    gap = abs(b[0] - (a[0]+a[2]))
+    height = abs(b[1]-a[1])
+    if gap <= 70 and height <=70:
+        return True
+    return False
+
+def posValue(x,y,w,h):
+    x += w//2
+    y += h//2
+    return x**0.5 + (y/50)*2
+
+
 test()
 
